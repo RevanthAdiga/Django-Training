@@ -17,7 +17,7 @@ class BikeListAV(APIView):
         """
         bikes = BikeList.objects.all()
         serializer = BikeListSerializer(bikes, many=True)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         """
@@ -29,7 +29,7 @@ class BikeListAV(APIView):
             serializer.save()
             return Response(serializer.data)
         else:
-            return Response(serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BikeDetailAV(APIView):
@@ -54,7 +54,12 @@ class BikeDetailAV(APIView):
         API to update a bike into the list
 
         """
-        bike = BikeList.objects.get(pk=pk)
+        try:
+            bike = BikeList.objects.get(pk=pk)
+        except BikeList.DoesNotExist:
+            return Response(
+                {"error": "bike not found"}, status=status.HTTP_400_BAD_REQUEST
+            )
         serializer = BikeListSerializer(bike, data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -67,6 +72,11 @@ class BikeDetailAV(APIView):
         API to delete a bike from the list
 
         """
-        bike = BikeList.objects.get(pk=pk)
+        try:
+            bike = BikeList.objects.get(pk=pk)
+        except BikeList.DoesNotExist:
+            return Response(
+                {"error": "bike not found"}, status=status.HTTP_400_BAD_REQUEST
+            )
         bike.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
