@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from bikeLists.models import BikeList, CompanyDetails, Review
+from bikeLists.models import Bike, CompanyDetails, Review
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -16,7 +16,7 @@ class BikeListSerializer(serializers.ModelSerializer):
     company = serializers.CharField(read_only=True, source="company_details.company")
 
     class Meta:
-        model = BikeList
+        model = Bike
         fields = "__all__"
 
 

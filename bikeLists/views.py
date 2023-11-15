@@ -1,4 +1,5 @@
 import structlog
+from django.db import transaction
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -12,13 +13,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from bikeLists.models import BikeList, CompanyDetails, Review
+from bikeLists.models import Bike, CompanyDetails, Review
 from bikeLists.permissions import AdminOrReadOnly, ReviewUserOrReadOnly
 from bikeLists.serializers import (
     BikeListSerializer,
     CompanySerializer,
     ReviewSerializer,
 )
+from bikeLists.services import add_bike, delete_bike, get_bikelist, update_bikelist
+from bikeLists.unit_of_work import BikesUnitOfWork
 
 logger = structlog.get_logger(__name__)
 
@@ -66,7 +69,7 @@ class ReviewCreate(generics.CreateAPIView):
             ValidationError: Same user cannot create multiple reviews
         """
         pk = self.kwargs["pk"]
-        bikelist = BikeList.objects.get(pk=pk)
+        bikelist = Bike.objects.get(pk=pk)
         reviewer = self.request.user
         review_queryset = Review.objects.filter(bikelist=bikelist, reviewer=reviewer)
 
@@ -136,14 +139,10 @@ class BikeListAV(APIView):
         API to return all the bike lists
 
         """
-        bikes = BikeList.objects.all()
-        serializer = BikeListSerializer(bikes, many=True)
-        logger.bind(
-            app_name="bikelists",
-            method_name="get_list_of_bikes",
-            serializer=serializer,
-        )
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        uow = BikesUnitOfWork(transaction)
+        bikelists = get_bikelist(uow, -1)
+        logger.bind(app_name="bikelists", method_name="get_bikelists")
+        return bikelists
 
     @extend_schema(
         request=BikeListSerializer,
@@ -154,17 +153,10 @@ class BikeListAV(APIView):
         API to create a bike to the list
 
         """
-        serializer = BikeListSerializer(data=request.data)
-        logger.bind(
-            app_name="bikelists",
-            method_name="upload bike object to list",
-            serializer=serializer,
-        )
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        uow = BikesUnitOfWork(transaction)
+        response = add_bike(uow, request.data)
+        logger.bind(app_name="bikelists", method_name="post_bikes")
+        return response
 
 
 class BikeDetailAV(APIView):
@@ -194,42 +186,22 @@ class BikeDetailAV(APIView):
         API to get a bike from the list
 
         """
-        try:
-            bike = BikeList.objects.get(pk=pk)
-        except BikeList.DoesNotExist:
-            return Response(
-                {"error": "bike not found"}, status=status.HTTP_400_BAD_REQUEST
-            )
-        serializer = BikeListSerializer(bike)
-        logger.bind(
-            app_name="bikelists",
-            method_name="retrieve a bike from the list",
-            serializer=serializer,
-        )
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        uow = BikesUnitOfWork(transaction)
+        bike = get_bikelist(uow, pk)
+        logger.bind(app_name="bikeList", method_name="get_bikeList")
+        return bike
 
     def put(self, request, pk):
         """
         API to update a bike into the list
 
         """
-        try:
-            bike = BikeList.objects.get(pk=pk)
-        except BikeList.DoesNotExist:
-            return Response(
-                {"error": "bike not found"}, status=status.HTTP_400_BAD_REQUEST
-            )
-        serializer = BikeListSerializer(bike, data=request.data)
+        uow = BikesUnitOfWork(transaction)
+        response = update_bikelist(uow, request.data, pk)
         logger.bind(
-            app_name="bikelists",
-            method_name="update a bike into the list",
-            serializer=serializer,
+            app_name="bikelist", method_name="update bike by id", request=request.data
         )
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return response
 
     def delete(self, request, pk):
         """
@@ -238,16 +210,11 @@ class BikeDetailAV(APIView):
         """
         logger.bind(
             app_name="bikelists",
-            method_name="delete a bike from the list",
+            method_name="delete_bike",
         )
-        try:
-            bike = BikeList.objects.get(pk=pk)
-        except BikeList.DoesNotExist:
-            return Response(
-                {"error": "bike not found"}, status=status.HTTP_400_BAD_REQUEST
-            )
-        bike.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        uow = BikesUnitOfWork(transaction)
+        response = delete_bike(uow, pk)
+        return response
 
 
 @extend_schema_view(

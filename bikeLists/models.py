@@ -11,7 +11,7 @@ class CompanyDetails(models.Model):
         return self.company
 
 
-class BikeList(models.Model):
+class Bike(models.Model):
     name = models.CharField(max_length=50)
     cc = models.IntegerField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True, null=True, blank=True)
@@ -33,9 +33,7 @@ class Review(models.Model):
     description = models.CharField(max_length=200, null=True)
     created = models.DateTimeField(auto_now_add=True)
     update = models.DateField(auto_now=True)
-    bikelist = models.ForeignKey(
-        BikeList, on_delete=models.CASCADE, related_name="reviews"
-    )
+    bikelist = models.ForeignKey(Bike, on_delete=models.CASCADE, related_name="reviews")
 
     def __str__(self):
         return str(self.rating) + " | " + self.bikelist.name
